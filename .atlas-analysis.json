@@ -1,0 +1,92 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "Smart Voting Contract",
+  "projectDescription": "A reusable on-chain voting system optimized for simplicity and low gas usage.",
+  "theme": "aspen",
+  "primaryColor": "#6366f1",
+  "lightColor": "#818cf8",
+  "darkColor": "#4f46e5",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/workflow",
+              "concepts/voting-mechanics",
+              "concepts/election-cycles"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/deployment",
+              "guides/managing-elections",
+              "guides/casting-votes",
+              "guides/configuration"
+            ]
+          },
+          {
+            "group": "Testing",
+            "pages": [
+              "testing/overview",
+              "testing/unit-tests",
+              "testing/integration-tests"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Smart Contract",
+            "pages": [
+              "api/member-vote",
+              "api/errors",
+              "api/events"
+            ]
+          },
+          {
+            "group": "Scripts",
+            "pages": [
+              "api/deployment-script",
+              "api/interaction-scripts",
+              "api/helper-config"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Pay-to-vote entry fee system",
+    "Owner-controlled workflow management",
+    "Double-voting prevention",
+    "Election cycle reset functionality",
+    "Gas-optimized operations",
+    "Foundry-based development"
+  ],
+  "publicApiSurface": [
+    "MemberVote.startVote()",
+    "MemberVote.resetVotes()",
+    "MemberVote.vote(uint256 option)",
+    "MemberVote.withdraw()",
+    "MemberVote.getOptionAVotes()",
+    "MemberVote.getOptionBVotes()",
+    "MemberVote.getElectionId()",
+    "MemberVote.getOwner()",
+    "MemberVote.getWorkflowStation()",
+    "MemberVote.getVoters()",
+    "MemberVote.addressVoted(address voter)"
+  ]
+}
