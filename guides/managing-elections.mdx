@@ -1,0 +1,287 @@
+---
+title: Managing Elections
+description: Learn how to start, manage, and reset voting elections as a contract owner
+---
+
+## Overview
+
+The Smart Voting Contract uses a workflow-based system to manage election states. As the contract owner, you can control the voting lifecycle through three distinct phases:
+
+- **Registering**: Initial state after deployment
+- **Voting**: Active voting period where members can cast votes
+- **Resetting**: Transitional state when preparing for a new election
+
+<Note>
+  All management functions are restricted to the contract owner (the address that deployed the contract). Attempting to call these functions from other addresses will revert with `MemberVote__NotOwner`.
+</Note>
+
+## Starting a Voting Round
+
+Initiate a new voting session to allow members to cast their votes.
+
+<Steps>
+  <Step title="Ensure you're the owner">
+    Verify you're using the wallet that deployed the contract:
+    ```bash
+    cast call YOUR_CONTRACT_ADDRESS "getOwner()" --rpc-url http://localhost:8545
+    ```
+  </Step>
+
+  <Step title="Start the vote">
+    Execute the start vote script:
+    
+    <CodeGroup>
+    ```bash Local (Anvil)
+    make start-vote
+    ```
+    
+    ```bash Sepolia Testnet
+    make start-vote ARGS="--network sepolia"
+    ```
+    </CodeGroup>
+    
+    This calls the `startVote()` function on the most recently deployed contract.
+  </Step>
+
+  <Step title="Verify the state change">
+    Confirm the workflow station changed to Voting (enum value 1):
+    ```bash
+    cast call YOUR_CONTRACT_ADDRESS "getWorkflowStation()" --rpc-url http://localhost:8545
+    ```
+  </Step>
+</Steps>
+
+### What Happens When Voting Starts
+
+The `startVote()` function (MemberVote.sol:52) performs these actions:
+
+1. Changes workflow station to `Voting`
+2. Resets Option A votes to 0
+3. Resets Option B votes to 0
+4. Clears the voters array for the new election
+
+```solidity src/MemberVote.sol
+function startVote() public onlyOwner {
+    s_workFlowStation = WorkFlowStation.Voting;
+    optionAVotes = 0;
+    optionBVotes = 0;
+    voters = new address[](0);
+}
+```
+
+## Resetting Votes
+
+End the current voting round and prepare for a new election.
+
+<Steps>
+  <Step title="Ensure voting is active">
+    The reset function only works when the contract is in the Voting state. Check the current state:
+    ```bash
+    cast call YOUR_CONTRACT_ADDRESS "getWorkflowStation()" --rpc-url http://localhost:8545
+    ```
+  </Step>
+
+  <Step title="Reset the votes">
+    Execute the reset vote script:
+    
+    <CodeGroup>
+    ```bash Local (Anvil)
+    make reset-vote
+    ```
+    
+    ```bash Sepolia Testnet
+    make reset-vote ARGS="--network sepolia"
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Verify election ID increment">
+    Confirm the election ID increased:
+    ```bash
+    cast call YOUR_CONTRACT_ADDRESS "getElectionId()" --rpc-url http://localhost:8545
+    ```
+  </Step>
+</Steps>
+
+### What Happens When Votes Reset
+
+The `resetVotes()` function (MemberVote.sol:63) performs these actions:
+
+1. Validates the workflow station is `Voting` (reverts with `MemberVote__WrongWorkflowStation` otherwise)
+2. Changes workflow station to `Resetting`
+3. Increments the election ID
+
+```solidity src/MemberVote.sol
+function resetVotes() public onlyOwner {
+    if (s_workFlowStation != WorkFlowStation.Voting) {
+        revert MemberVote__WrongWorkflowStation();
+    }
+    s_workFlowStation = WorkFlowStation.Resetting;
+    s_electionId++;
+}
+```
+
+<Info>
+  The election ID increment allows the same addresses to vote again in subsequent elections. The contract tracks which election each address voted in (MemberVote.sol:85).
+</Info>
+
+## Interaction Scripts
+
+The management functions use Foundry scripts in `script/Interactions.s.sol`:
+
+### StartVote Script
+
+The `StartVote` contract (Interactions.s.sol:9) handles starting elections:
+
+```solidity script/Interactions.s.sol
+contract StartVote is Script {
+    function run() external {
+        address mostRecentDeployed = DevOpsTools.get_most_recent_deployment("MemberVote", block.chainid);
+        startVote(mostRecentDeployed);
+    }
+
+    function startVote(address _contractAddress) public {
+        vm.startBroadcast();
+        MemberVote(_contractAddress).startVote();
+        vm.stopBroadcast();
+    }
+}
+```
+
+### ResetVotes Script
+
+The `ResetVotes` contract (Interactions.s.sol:22) handles resetting elections:
+
+```solidity script/Interactions.s.sol
+contract ResetVotes is Script {
+    function run() external {
+        address mostRecentDeployed = DevOpsTools.get_most_recent_deployment("MemberVote", block.chainid);
+        resetVote(mostRecentDeployed);
+    }
+
+    function resetVote(address _contractAddress) public {
+        vm.startBroadcast();
+        MemberVote(_contractAddress).resetVotes();
+        vm.stopBroadcast();
+    }
+}
+```
+
+### Contract Discovery
+
+Both scripts use `DevOpsTools.get_most_recent_deployment()` to automatically find the most recently deployed MemberVote contract on the current chain. This eliminates the need to manually specify contract addresses.
+
+## Owner-Only Functions
+
+All management functions are protected by the `onlyOwner` modifier (MemberVote.sol:42):
+
+```solidity src/MemberVote.sol
+modifier onlyOwner() {
+    if (msg.sender != i_owner) {
+        revert MemberVote__NotOwner();
+    }
+    _;
+}
+```
+
+Functions restricted to the owner:
+- `startVote()` - Begin a voting round
+- `resetVotes()` - End and reset a voting round
+- `withdraw()` - Withdraw collected entry fees
+
+## Viewing Election Results
+
+Check the current vote tallies before resetting:
+
+<CodeGroup>
+```bash Option A Votes
+cast call YOUR_CONTRACT_ADDRESS "getOptionAVotes()" --rpc-url http://localhost:8545
+```
+
+```bash Option B Votes
+cast call YOUR_CONTRACT_ADDRESS "getOptionBVotes()" --rpc-url http://localhost:8545
+```
+
+```bash All Voters
+cast call YOUR_CONTRACT_ADDRESS "getVoters()" --rpc-url http://localhost:8545
+```
+</CodeGroup>
+
+## Withdrawing Funds
+
+Collect the entry fees paid by voters:
+
+```bash
+cast send YOUR_CONTRACT_ADDRESS "withdraw()" --private-key YOUR_PRIVATE_KEY --rpc-url http://localhost:8545
+```
+
+<Warning>
+  Only the contract owner can withdraw funds. The entire contract balance is sent to the owner address (MemberVote.sol:108).
+</Warning>
+
+## Troubleshooting
+
+### MemberVote__NotOwner
+
+**Problem**: Transaction reverts when trying to start or reset votes.
+
+**Solution**: Ensure you're using the same wallet that deployed the contract. Check the owner address:
+```bash
+cast call YOUR_CONTRACT_ADDRESS "getOwner()" --rpc-url http://localhost:8545
+```
+
+### MemberVote__WrongWorkflowStation
+
+**Problem**: Reset fails because voting hasn't started.
+
+**Solution**: You can only reset votes when the contract is in the Voting state. Start voting first with `make start-vote`.
+
+### Contract Not Found
+
+**Problem**: Scripts fail to find the deployed contract.
+
+**Solution**: Ensure you've deployed the contract on the current network and that deployment data exists in the `broadcast/` directory.
+
+## Election Lifecycle Example
+
+A complete election cycle:
+
+<Steps>
+  <Step title="Deploy contract">
+    ```bash
+    make deploy
+    ```
+    Contract is in Registering state.
+  </Step>
+
+  <Step title="Start voting">
+    ```bash
+    make start-vote
+    ```
+    Contract moves to Voting state. Vote counts reset to 0.
+  </Step>
+
+  <Step title="Allow voting">
+    Members cast votes during this period.
+  </Step>
+
+  <Step title="Reset for new election">
+    ```bash
+    make reset-vote
+    ```
+    Contract moves to Resetting state. Election ID increments.
+  </Step>
+
+  <Step title="Start new round">
+    ```bash
+    make start-vote
+    ```
+    Begin a fresh voting round with the same contract.
+  </Step>
+</Steps>
+
+## Next Steps
+
+- [Cast Votes](/guides/casting-votes) - Learn how voters participate
+- [Configuration](/guides/configuration) - Customize contract settings
+- [API Reference](/api/member-vote) - View all available functions

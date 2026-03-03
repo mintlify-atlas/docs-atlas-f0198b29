@@ -1,80 +1,201 @@
 ---
 title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+description: "Get started with the Smart Voting Contract in under 5 minutes"
 ---
 
-## Get started in three steps
+This guide will help you deploy and interact with the MemberVote contract locally. You'll learn how to set up the project, deploy the contract, start a vote, and cast votes.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+Before you begin, ensure you have [Foundry](https://book.getfoundry.sh/getting-started/installation) installed:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+```bash
+curl -L https://foundry.paradigm.xyz | bash
+foundryup
+```
+
+## Installation
+
+<Steps>
+  <Step title="Clone and navigate to the project">
+    ```bash
+    git clone <your-repo-url>
+    cd smart-voting-contract
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    Install Foundry dependencies including foundry-devops and forge-std:
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    ```bash
+    make install
+    ```
+  </Step>
+
+  <Step title="Build the project">
+    Compile the smart contracts:
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+    ```bash
+    make build
+    ```
+  </Step>
 
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+  <Step title="Run tests">
+    Verify everything works correctly:
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    ```bash
+    make test
+    ```
+  </Step>
+</Steps>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+## Local Deployment
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+<Steps>
+  <Step title="Start local Anvil node">
+    Open a terminal and start a local Ethereum node:
+    
+    ```bash
+    make anvil
+    ```
+    
+    This starts Anvil with a 1-second block time and deterministic test accounts.
+  </Step>
 
-### Step 3: Go live
+  <Step title="Deploy the contract">
+    In a new terminal, deploy the MemberVote contract:
+    
+    ```bash
+    make deploy
+    ```
+    
+    This deploys the contract to your local Anvil node using the default deployment key.
+  </Step>
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+  <Step title="Start the voting process">
+    Initialize voting by calling the `startVote` function:
+    
+    ```bash
+    make start-vote
+    ```
+    
+    This changes the contract workflow from `Registering` to `Voting` state, allowing members to cast votes.
+  </Step>
+</Steps>
 
-## Next steps
+## Casting Votes
 
-Now that you have your docs running, explore these key features:
+Once voting is active, members can cast their votes for either Option A (0) or Option B (1).
+
+### Vote for Option A
+
+Set the vote option environment variable and cast your vote:
+
+```bash
+export VOTE_OPTION=0
+make vote
+```
+
+### Vote for Option B
+
+```bash
+export VOTE_OPTION=1
+make vote
+```
+
+### How voting works
+
+The `vote` function in MemberVote.sol (src/MemberVote.sol:76) accepts an option parameter and entry fee:
+
+```solidity
+function vote(uint256 option) public payable {
+    address voter = msg.sender;
+    if (msg.value < i_entryFee) {
+        revert MemberVote__InvalidEntryFee();
+    }
+    if (s_workFlowStation != WorkFlowStation.Voting) {
+        revert MemberVote__WrongWorkflowStation();
+    }
+    if (s_addressToVoted[voter] == s_electionId) {
+        revert MemberVote__AlreadyVoted();
+    }
+    if (option != 0 && option != 1) {
+        revert MemberVote__InvalidOption();
+    }
+    // Records vote and increments count
+}
+```
+
+<Info>
+  **Entry Fee**: Each vote requires an entry fee (configured during deployment). The contract validates the fee amount before accepting the vote.
+</Info>
+
+## Resetting Elections
+
+When you're ready to start a new election round, reset the votes:
+
+```bash
+make reset-vote
+```
+
+This increments the election ID and transitions the workflow to the `Resetting` state, preparing for a new voting cycle.
+
+## Testnet Deployment (Optional)
+
+To deploy to Sepolia testnet, you'll need to configure your environment:
+
+<Steps>
+  <Step title="Set up environment variables">
+    Create a `.env` file in the project root:
+    
+    ```bash
+    SEPOLIA_RPC_URL=your_sepolia_rpc_url
+    PRIVATE_KEY=your_private_key
+    ETHERSCAN_API_KEY=your_etherscan_api_key
+    ```
+    
+    <Warning>
+      Never commit your `.env` file to version control. Keep your private keys secure.
+    </Warning>
+  </Step>
+
+  <Step title="Deploy to Sepolia">
+    ```bash
+    make deploy ARGS="--network sepolia"
+    ```
+    
+    This will deploy the contract and verify it on Etherscan automatically.
+  </Step>
+
+  <Step title="Interact with testnet contract">
+    Use the same commands with the network argument:
+    
+    ```bash
+    make start-vote ARGS="--network sepolia"
+    make vote ARGS="--network sepolia"
+    make reset-vote ARGS="--network sepolia"
+    ```
+  </Step>
+</Steps>
+
+## Next Steps
+
+Now that you have the basics down, explore more advanced features:
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Core Concepts" icon="lightbulb" href="/concepts/workflow">
+    Learn about the workflow states and voting lifecycle
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api/member-vote">
+    Explore all contract functions and events
+  </Card>
+  
+  <Card title="Testing Guide" icon="flask" href="/testing/overview">
+    Write comprehensive tests for your voting scenarios
+  </Card>
+  
+  <Card title="Advanced Deployment" icon="rocket" href="/guides/deployment">
+    Production deployment strategies and best practices
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

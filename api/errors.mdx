@@ -1,0 +1,196 @@
+---
+title: 'Contract Errors'
+description: 'Custom error reference for the MemberVote contract'
+---
+
+## Overview
+
+The MemberVote contract uses custom errors for gas-efficient error handling. All errors follow the naming convention `MemberVote__<ErrorName>`.
+
+## Error Definitions
+
+### MemberVote__NotOwner
+
+```solidity
+error MemberVote__NotOwner();
+```
+
+**Thrown when**: A function restricted to the contract owner is called by a non-owner address.
+
+**Affected functions**:
+- `startVote()`
+- `resetVotes()`
+- `withdraw()`
+
+**How to avoid**: Ensure only the contract owner (deployer address) calls owner-restricted functions.
+
+**Example scenario**:
+```solidity
+// This will revert if caller is not the owner
+voting.startVote(); // Reverts with MemberVote__NotOwner
+```
+
+---
+
+### MemberVote__AlreadyVoted
+
+```solidity
+error MemberVote__AlreadyVoted();
+```
+
+**Thrown when**: A voter attempts to vote more than once in the same election.
+
+**Affected functions**:
+- `vote(uint256 option)`
+
+**How to avoid**: Check if the address has already voted in the current election using `addressVoted()` before calling `vote()`.
+
+**Example scenario**:
+```solidity
+// First vote succeeds
+voting.vote{value: 0.01 ether}(0);
+
+// Second vote in same election reverts
+voting.vote{value: 0.01 ether}(1); // Reverts with MemberVote__AlreadyVoted
+```
+
+**Prevention check**:
+```solidity
+uint256 currentElection = voting.getElectionId();
+uint256 votedInElection = voting.addressVoted(msg.sender);
+
+if (votedInElection != currentElection) {
+    voting.vote{value: 0.01 ether}(option);
+}
+```
+
+---
+
+### MemberVote__WrongWorkflowStation
+
+```solidity
+error MemberVote__WrongWorkflowStation();
+```
+
+**Thrown when**: A function is called during an incorrect workflow phase.
+
+**Affected functions**:
+- `vote(uint256 option)` - requires `Voting` state
+- `resetVotes()` - requires `Voting` state
+
+**How to avoid**: Check the current workflow station using `getWorkflowStation()` before calling state-dependent functions.
+
+**Example scenarios**:
+```solidity
+// Trying to vote before startVote() is called
+voting.vote{value: 0.01 ether}(0); // Reverts with MemberVote__WrongWorkflowStation
+
+// Trying to reset when not in Voting state
+voting.resetVotes(); // Reverts with MemberVote__WrongWorkflowStation
+```
+
+**Prevention check**:
+```solidity
+WorkFlowStation current = voting.getWorkflowStation();
+
+if (current == WorkFlowStation.Voting) {
+    voting.vote{value: 0.01 ether}(option);
+} else {
+    // Handle non-voting state
+}
+```
+
+---
+
+### MemberVote__InvalidOption
+
+```solidity
+error MemberVote__InvalidOption();
+```
+
+**Thrown when**: The `vote()` function is called with an option value other than 0 or 1.
+
+**Affected functions**:
+- `vote(uint256 option)`
+
+**Valid values**:
+- `0` - Vote for Option A
+- `1` - Vote for Option B
+
+**How to avoid**: Only pass 0 or 1 as the option parameter.
+
+**Example scenario**:
+```solidity
+// Invalid option values
+voting.vote{value: 0.01 ether}(2); // Reverts with MemberVote__InvalidOption
+voting.vote{value: 0.01 ether}(99); // Reverts with MemberVote__InvalidOption
+
+// Valid option values
+voting.vote{value: 0.01 ether}(0); // OK - Option A
+voting.vote{value: 0.01 ether}(1); // OK - Option B
+```
+
+---
+
+### MemberVote__InvalidEntryFee
+
+```solidity
+error MemberVote__InvalidEntryFee();
+```
+
+**Thrown when**: The `vote()` function is called with insufficient payment (msg.value < entryFee).
+
+**Affected functions**:
+- `vote(uint256 option)`
+
+**How to avoid**: Ensure the transaction includes at least the required entry fee amount.
+
+**Example scenario**:
+```solidity
+// Contract deployed with 0.01 ETH entry fee
+MemberVote voting = new MemberVote(0.01 ether);
+
+// Insufficient payment
+voting.vote{value: 0.005 ether}(0); // Reverts with MemberVote__InvalidEntryFee
+
+// Exact payment (OK)
+voting.vote{value: 0.01 ether}(0); // OK
+
+// Overpayment (also OK)
+voting.vote{value: 0.02 ether}(0); // OK - excess is accepted
+```
+
+---
+
+### MemberVote__WithdrawFailed
+
+```solidity
+error MemberVote__WithdrawFailed();
+```
+
+**Thrown when**: The low-level call to transfer funds to the owner fails during withdrawal.
+
+**Affected functions**:
+- `withdraw()`
+
+**Possible causes**:
+- Owner address is a contract that rejects payments
+- Owner contract's receive/fallback function reverts
+- Out of gas during the transfer
+
+**How to avoid**: Ensure the owner address can receive ETH transfers. If the owner is a contract, implement a proper `receive()` or `fallback()` function.
+
+**Example scenario**:
+```solidity
+// Owner is a contract that rejects ETH
+voting.withdraw(); // May revert with MemberVote__WithdrawFailed
+```
+
+**Owner contract example (correct)**:
+```solidity
+contract VotingManager {
+    receive() external payable {
+        // Accept ETH transfers
+    }
+}
+```

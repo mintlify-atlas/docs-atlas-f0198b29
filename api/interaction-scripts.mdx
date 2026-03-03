@@ -1,0 +1,210 @@
+---
+title: 'Interaction Scripts'
+description: 'API reference for MemberVote contract interaction scripts'
+---
+
+## Overview
+
+The interaction scripts provide convenient functions for interacting with deployed MemberVote contracts. All scripts use DevOpsTools to automatically locate the most recently deployed contract.
+
+Location: `script/Interactions.s.sol`
+
+## Contract: StartVote
+
+Starts the voting process on a deployed MemberVote contract.
+
+### run()
+
+Entry point that finds the most recent deployment and starts voting.
+
+```solidity
+function run() external {
+    address mostRecentDeployed = DevOpsTools.get_most_recent_deployment("MemberVote", block.chainid);
+    startVote(mostRecentDeployed);
+}
+```
+
+### startVote()
+
+Starts voting on a specific contract address.
+
+**Parameters:**
+- `_contractAddress` (`address`) - The address of the MemberVote contract
+
+```solidity
+function startVote(address _contractAddress) public {
+    vm.startBroadcast();
+    MemberVote(_contractAddress).startVote();
+    vm.stopBroadcast();
+}
+```
+
+**Usage:**
+
+```bash
+# Start voting on most recent deployment (Anvil)
+make start-vote
+
+# Start voting on Sepolia
+make start-vote ARGS="--network sepolia"
+```
+
+## Contract: ResetVotes
+
+Resets all votes and vote counts on a deployed MemberVote contract.
+
+### run()
+
+Entry point that finds the most recent deployment and resets votes.
+
+```solidity
+function run() external {
+    address mostRecentDeployed = DevOpsTools.get_most_recent_deployment("MemberVote", block.chainid);
+    resetVote(mostRecentDeployed);
+}
+```
+
+### resetVote()
+
+Resets votes on a specific contract address.
+
+**Parameters:**
+- `_contractAddress` (`address`) - The address of the MemberVote contract
+
+```solidity
+function resetVote(address _contractAddress) public {
+    vm.startBroadcast();
+    MemberVote(_contractAddress).resetVotes();
+    vm.stopBroadcast();
+}
+```
+
+**Usage:**
+
+```bash
+# Reset votes on most recent deployment (Anvil)
+make reset-vote
+
+# Reset votes on Sepolia
+make reset-vote ARGS="--network sepolia"
+```
+
+## Contract: Vote
+
+Casts a vote on a deployed MemberVote contract with the required entry fee.
+
+### run()
+
+Entry point that finds the most recent deployment and casts a vote.
+
+```solidity
+function run() external {
+    address mostRecentDeployed = DevOpsTools.get_most_recent_deployment("MemberVote", block.chainid);
+    HelperConfig helperConfig = new HelperConfig();
+    (uint256 entryFee) = helperConfig.activeNetworkConfig();
+    uint256 option = vm.envOr("VOTE_OPTION", uint256(0));
+    vote(mostRecentDeployed, option, entryFee);
+}
+```
+
+**Environment Variables:**
+- `VOTE_OPTION` - The voting option (0-2). Defaults to 0 if not set.
+
+### vote()
+
+Casts a vote on a specific contract address.
+
+**Parameters:**
+- `_contractAddress` (`address`) - The address of the MemberVote contract
+- `_option` (`uint256`) - The voting option (0, 1, or 2)
+- `_value` (`uint256`) - The amount of ETH to send as entry fee
+
+```solidity
+function vote(address _contractAddress, uint256 _option, uint256 _value) public payable {
+    vm.startBroadcast();
+    MemberVote(_contractAddress).vote{value: _value}(_option);
+    vm.stopBroadcast();
+}
+```
+
+**Usage:**
+
+```bash
+# Vote for option 0 on Anvil
+make vote
+
+# Vote for option 1 on Sepolia
+VOTE_OPTION=1 make vote ARGS="--network sepolia"
+
+# Vote for option 2
+VOTE_OPTION=2 make vote
+```
+
+## DevOpsTools Integration
+
+All interaction scripts use the `foundry-devops` library to automatically locate deployed contracts:
+
+```solidity
+address mostRecentDeployed = DevOpsTools.get_most_recent_deployment("MemberVote", block.chainid);
+```
+
+**How it works:**
+- Searches for the most recently deployed contract named "MemberVote"
+- Filters by the current chain ID
+- Returns the contract address automatically
+
+This eliminates the need to manually specify contract addresses when interacting with deployments.
+
+## Full Source Code
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.18;
+
+import {Script} from "forge-std/Script.sol";
+import {MemberVote} from "src/MemberVote.sol";
+import {HelperConfig} from "script/HelperConfig.s.sol";
+import {DevOpsTools} from "lib/foundry-devops/src/DevOpsTools.sol";
+
+contract StartVote is Script {
+    function run() external {
+        address mostRecentDeployed = DevOpsTools.get_most_recent_deployment("MemberVote", block.chainid);
+        startVote(mostRecentDeployed);
+    }
+
+    function startVote(address _contractAddress) public {
+        vm.startBroadcast();
+        MemberVote(_contractAddress).startVote();
+        vm.stopBroadcast();
+    }
+}
+
+contract ResetVotes is Script {
+    function run() external {
+        address mostRecentDeployed = DevOpsTools.get_most_recent_deployment("MemberVote", block.chainid);
+        resetVote(mostRecentDeployed);
+    }
+
+    function resetVote(address _contractAddress) public {
+        vm.startBroadcast();
+        MemberVote(_contractAddress).resetVotes();
+        vm.stopBroadcast();
+    }
+}
+
+contract Vote is Script {
+    function run() external {
+        address mostRecentDeployed = DevOpsTools.get_most_recent_deployment("MemberVote", block.chainid);
+        HelperConfig helperConfig = new HelperConfig();
+        (uint256 entryFee) = helperConfig.activeNetworkConfig();
+        uint256 option = vm.envOr("VOTE_OPTION", uint256(0));
+        vote(mostRecentDeployed, option, entryFee);
+    }
+
+    function vote(address _contractAddress, uint256 _option, uint256 _value) public payable {
+        vm.startBroadcast();
+        MemberVote(_contractAddress).vote{value: _value}(_option);
+        vm.stopBroadcast();
+    }
+}
+```

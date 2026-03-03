@@ -1,0 +1,333 @@
+---
+title: Integration Tests
+description: End-to-end workflow testing for the Smart Voting Contract
+---
+
+Integration tests validate complete workflows and multi-step processes, ensuring the contract behaves correctly in real-world scenarios.
+
+## Test Files
+
+### MemberVoteTest.t.sol
+
+Location: `test/integration/MemberVoteTest.t.sol`
+
+This file contains integration tests that validate complete voting cycles and state transitions.
+
+#### Test Setup
+
+Identical to unit tests, but focuses on multi-step scenarios:
+
+```solidity
+contract MemberVoteTest is Test {
+    address public USER1 = makeAddr("user");
+    address public USER2 = makeAddr("user2");
+    address public USER3 = makeAddr("user3");
+    uint256 public constant OPTION_A = 0;
+    uint256 public constant OPTION_B = 1;
+    uint256 public constant STARTING_ELECTION_ID = 1;
+    uint256 public constant STARTING_OPTION_A_VOTES = 0;
+    uint256 public constant STARTING_OPTION_B_VOTES = 0;
+    uint256 public constant STARTING_PLAYER_BALANCE = 1 ether;
+    MemberVote public memberVote;
+    HelperConfig public helperConfig;
+
+    function setUp() external {
+        DeployMemberVote deployer = new DeployMemberVote();
+        (memberVote, helperConfig) = deployer.run();
+        vm.deal(USER1, STARTING_PLAYER_BALANCE);
+        vm.deal(USER2, STARTING_PLAYER_BALANCE);
+        vm.deal(USER3, STARTING_PLAYER_BALANCE);
+    }
+}
+```
+
+## Complete Voting Cycle Test
+
+The primary integration test validates a full election cycle with reset:
+
+```solidity
+function testIfVoterCanVoteAfterReset() external {
+    (uint256 entryFee) = helperConfig.activeNetworkConfig();
+    
+    // First election cycle
+    vm.prank(msg.sender);
+    memberVote.startVote();
+    vm.prank(USER1);
+    memberVote.vote{value: entryFee}(OPTION_A);
+    vm.prank(USER2);
+    memberVote.vote{value: entryFee}(OPTION_B);
+    vm.prank(USER3);
+    memberVote.vote{value: entryFee}(OPTION_A);
+
+    // Reset and start new election
+    vm.startPrank(msg.sender);
+    memberVote.resetVotes();
+    memberVote.startVote();
+    vm.stopPrank();
+    
+    // Second election cycle
+    vm.prank(USER1);
+    memberVote.vote{value: entryFee}(OPTION_A);
+    vm.prank(USER2);
+    memberVote.vote{value: entryFee}(OPTION_B);
+    vm.prank(USER3);
+    memberVote.vote{value: entryFee}(OPTION_A);
+    
+    assertEq(memberVote.getOptionAVotes(), 2, "Option A should have 2 votes after reset and new votes");
+    assertEq(memberVote.getOptionBVotes(), 1, "Option B should have 1 vote after reset and new votes");
+}
+```
+
+Reference: `test/integration/MemberVoteTest.t.sol:30`
+
+## What This Test Validates
+
+### Complete Workflow
+
+The test validates the entire voting workflow:
+
+1. **Initial Election**
+   - Owner starts voting session
+   - Multiple users cast votes
+   - Votes are counted correctly
+   - First election has results: 2 votes for Option A, 1 for Option B
+
+2. **Reset Process**
+   - Owner resets votes (transitions to Finished state)
+   - Owner starts new voting session
+   - State properly transitions back to Voting
+
+3. **New Election**
+   - Same users can vote again in new election
+   - Previous votes don't carry over
+   - New votes are counted independently
+   - Second election has fresh results
+
+### State Reset Verification
+
+The test confirms that `resetVotes()` properly clears:
+
+- Vote counts (both options reset to 0)
+- Voter tracking (users can vote again)
+- Election ID (increments to track new election)
+- Workflow station (transitions through states correctly)
+
+### Multi-User Scenarios
+
+The test uses three different users to validate:
+
+- Multiple voters can participate in same election
+- Each user's vote is counted correctly
+- Users can participate in multiple elections
+- Duplicate vote prevention works within each election but not across elections
+
+### State Transition Flow
+
+The complete state flow validated:
+
+```
+Registering (0) 
+    → startVote() → 
+Voting (1) 
+    → [users vote] → 
+    → resetVotes() → 
+Finished (2) 
+    → startVote() → 
+Voting (1) 
+    → [users vote again]
+```
+
+## Running Integration Tests
+
+```bash
+# Run all integration tests
+forge test --match-path "test/integration/*.sol"
+
+# Run with verbose output to see state transitions
+forge test --match-path "test/integration/*.sol" -vvv
+
+# Run with traces to see full execution flow
+forge test --match-path "test/integration/*.sol" -vvvvv
+```
+
+## Test Patterns
+
+### Multi-Step Workflows
+
+Integration tests chain multiple operations:
+
+```solidity
+// Step 1: First election
+vm.prank(msg.sender);
+memberVote.startVote();
+vm.prank(USER1);
+memberVote.vote{value: entryFee}(OPTION_A);
+
+// Step 2: Reset
+vm.startPrank(msg.sender);
+memberVote.resetVotes();
+memberVote.startVote();
+vm.stopPrank();
+
+// Step 3: Second election  
+vm.prank(USER1);
+memberVote.vote{value: entryFee}(OPTION_A);
+```
+
+### Multiple User Interactions
+
+Tests simulate real-world scenarios with multiple participants:
+
+```solidity
+vm.prank(USER1);
+memberVote.vote{value: entryFee}(OPTION_A);
+vm.prank(USER2);
+memberVote.vote{value: entryFee}(OPTION_B);
+vm.prank(USER3);
+memberVote.vote{value: entryFee}(OPTION_A);
+```
+
+### State Verification
+
+Integration tests verify end state after complete workflows:
+
+```solidity
+assertEq(
+    memberVote.getOptionAVotes(), 
+    2, 
+    "Option A should have 2 votes after reset and new votes"
+);
+assertEq(
+    memberVote.getOptionBVotes(), 
+    1, 
+    "Option B should have 1 vote after reset and new votes"
+);
+```
+
+Note the descriptive error messages that help debug complex workflows.
+
+## Key Differences from Unit Tests
+
+### Unit Tests
+- Test individual functions in isolation
+- Validate single operations
+- Focus on edge cases and error conditions
+- Quick to run
+- Easy to pinpoint failures
+
+### Integration Tests
+- Test complete workflows
+- Validate multi-step processes
+- Focus on real-world scenarios
+- May take longer to run
+- Test interactions between components
+
+## Real-World Scenarios Covered
+
+### Election Reset
+
+The integration test validates the critical ability to:
+- Complete one election
+- Reset all state
+- Run a new election with same participants
+- Ensure votes don't carry over between elections
+
+This is essential for reusing the contract across multiple voting sessions.
+
+### User Experience
+
+The test confirms users can:
+- Participate in multiple elections over time
+- Vote again after election resets
+- Trust that their previous votes are properly cleared
+- Rely on consistent vote counting
+
+## Best Practices
+
+### Descriptive Assertions
+
+Always include meaningful error messages:
+
+```solidity
+assertEq(
+    memberVote.getOptionAVotes(), 
+    2, 
+    "Option A should have 2 votes after reset and new votes"
+);
+```
+
+This helps identify which part of a complex workflow failed.
+
+### Multiple Verification Points
+
+Integration tests should verify state at multiple points:
+
+```solidity
+// After first election (implicit in the test flow)
+// After reset (could add explicit checks)
+// After second election (explicitly verified)
+assertEq(memberVote.getOptionAVotes(), 2);
+assertEq(memberVote.getOptionBVotes(), 1);
+```
+
+### Use vm.startPrank/stopPrank for Multiple Calls
+
+When the same address makes multiple calls:
+
+```solidity
+vm.startPrank(msg.sender);
+memberVote.resetVotes();
+memberVote.startVote();
+vm.stopPrank();
+```
+
+This is more efficient than multiple `vm.prank()` calls.
+
+## Expanding Integration Tests
+
+Consider adding integration tests for:
+
+### Fund Management Workflow
+
+```solidity
+// 1. Collect fees from multiple voters
+// 2. Owner withdraws funds
+// 3. Verify contract balance is 0
+// 4. Start new election
+// 5. Collect fees again
+```
+
+### Error Recovery
+
+```solidity
+// 1. Start voting
+// 2. Users vote
+// 3. Try invalid operation
+// 4. Recover and complete workflow
+```
+
+### Maximum Participation
+
+```solidity
+// 1. Many users vote
+// 2. Verify gas costs stay reasonable
+// 3. Verify all votes counted
+```
+
+## Running All Tests Together
+
+```bash
+# Run both unit and integration tests
+make test
+
+# Or with forge
+forge test
+
+# With coverage report
+forge coverage
+```
+
+## Next Steps
+
+- [Unit Tests](/testing/unit-tests) - Learn about individual function testing
+- [Testing Overview](/testing/overview) - Return to testing overview

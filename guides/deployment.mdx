@@ -1,0 +1,183 @@
+---
+title: Deployment
+description: Learn how to deploy the Smart Voting Contract to local and testnet networks
+---
+
+## Prerequisites
+
+Before deploying the Smart Voting Contract, ensure you have:
+
+- [Foundry](https://book.getfoundry.sh/getting-started/installation) installed
+- A wallet with Sepolia ETH (for testnet deployment)
+- An Etherscan API key (for contract verification)
+
+## Installation
+
+<Steps>
+  <Step title="Clone the repository">
+    Clone the Smart Voting Contract repository to your local machine:
+    ```bash
+    git clone <repository-url>
+    cd smart-voting-contract
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    Install the required Foundry dependencies:
+    ```bash
+    make install
+    ```
+    
+    This installs:
+    - `cyfrin/foundry-devops@0.2.1` - For deployment tracking
+    - `foundry-rs/forge-std@v1.8.1` - Foundry standard library
+  </Step>
+
+  <Step title="Build the project">
+    Compile the smart contracts:
+    ```bash
+    forge build
+    ```
+  </Step>
+</Steps>
+
+## Local Deployment
+
+Deploy to a local Anvil node for development and testing.
+
+<Steps>
+  <Step title="Start Anvil">
+    Start a local Ethereum node with Anvil:
+    ```bash
+    make anvil
+    ```
+    
+    This starts Anvil with:
+    - Mnemonic: `test test test test test test test test test test test junk`
+    - Block time: 1 second
+    - Steps tracing enabled
+  </Step>
+
+  <Step title="Deploy the contract">
+    In a new terminal, deploy the MemberVote contract:
+    ```bash
+    make deploy
+    ```
+    
+    This deploys using:
+    - RPC URL: `http://localhost:8545`
+    - Default Anvil private key
+    - Entry fee: `0.01 ether` (configured in HelperConfig.s.sol:27)
+  </Step>
+
+  <Step title="Verify deployment">
+    The deployment script will output the contract address. Save this for interactions:
+    ```
+    Deployed MemberVote at: 0x...
+    ```
+  </Step>
+</Steps>
+
+## Sepolia Testnet Deployment
+
+Deploy to Sepolia testnet for public testing.
+
+<Steps>
+  <Step title="Configure environment variables">
+    Create a `.env` file in the project root:
+    ```bash
+    SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/YOUR_API_KEY
+    PRIVATE_KEY=your_private_key_here
+    ETHERSCAN_API_KEY=your_etherscan_api_key
+    ```
+    
+    <Warning>
+      Never commit your `.env` file to version control. Ensure it's listed in `.gitignore`.
+    </Warning>
+  </Step>
+
+  <Step title="Fund your wallet">
+    Ensure your wallet has sufficient Sepolia ETH:
+    - Get free Sepolia ETH from [Alchemy Faucet](https://sepoliafaucet.com/)
+    - You'll need ETH for deployment gas costs
+  </Step>
+
+  <Step title="Deploy to Sepolia">
+    Deploy the contract with automatic verification:
+    ```bash
+    make deploy ARGS="--network sepolia"
+    ```
+    
+    This deploys with:
+    - Entry fee: `0.01 ether` (configured in HelperConfig.s.sol:22)
+    - Automatic Etherscan verification
+    - Verbose output (`-vvvv`)
+  </Step>
+
+  <Step title="Verify on Etherscan">
+    The contract will be automatically verified on Etherscan. You can view it at:
+    ```
+    https://sepolia.etherscan.io/address/YOUR_CONTRACT_ADDRESS
+    ```
+  </Step>
+</Steps>
+
+## Deployment Configuration
+
+The deployment uses `HelperConfig.s.sol` to manage network-specific settings:
+
+```solidity script/HelperConfig.s.sol
+function getSepoliaConfig() public pure returns (NetworkConfig memory) {
+    NetworkConfig memory sepoliaConfig = NetworkConfig({entryFee: 0.01 ether});
+    return sepoliaConfig;
+}
+
+function getOrCreateAnvilConfig() public pure returns (NetworkConfig memory) {
+    NetworkConfig memory anvilConfig = NetworkConfig({entryFee: 0.01 ether});
+    return anvilConfig;
+}
+```
+
+### Network Detection
+
+The HelperConfig automatically detects the network:
+- **Chain ID 11155111**: Sepolia configuration (HelperConfig.s.sol:14)
+- **Other chains**: Anvil/local configuration (HelperConfig.s.sol:17)
+
+## Deployment Script
+
+The `DeployMemberVote` script (script/MemberVote.s.sol:8) handles deployment:
+
+1. Creates a HelperConfig instance
+2. Retrieves the active network configuration
+3. Deploys the MemberVote contract with the entry fee
+4. Returns the deployed contract and config
+
+## Troubleshooting
+
+### Insufficient Funds
+
+If deployment fails with "insufficient funds":
+- Check your wallet balance has enough ETH for gas
+- For Sepolia, get more testnet ETH from a faucet
+
+### RPC Connection Issues
+
+If you see RPC connection errors:
+- Verify your `SEPOLIA_RPC_URL` is correct
+- Check your API key is valid
+- Ensure you have network connectivity
+
+### Verification Failed
+
+If Etherscan verification fails:
+- Verify your `ETHERSCAN_API_KEY` is valid
+- Wait a few minutes and try verifying manually
+- Check Etherscan's status page for outages
+
+## Next Steps
+
+After deployment:
+- [Manage Elections](/guides/managing-elections) - Start and reset voting rounds
+- [Cast Votes](/guides/casting-votes) - Allow users to participate
+- [Configuration](/guides/configuration) - Customize deployment settings

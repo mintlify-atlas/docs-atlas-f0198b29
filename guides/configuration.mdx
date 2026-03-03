@@ -1,0 +1,422 @@
+---
+title: Configuration
+description: Learn how to customize and configure the Smart Voting Contract deployment settings
+---
+
+## Overview
+
+The Smart Voting Contract uses several configuration files to manage deployment settings, network configurations, and build options. This guide covers all customization options available.
+
+## Foundry Configuration
+
+The `foundry.toml` file contains Foundry-specific build and test configurations.
+
+### Current Configuration
+
+```toml foundry.toml
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+
+fs_permissions = [
+    { access = "read", path = "./broadcast" },
+    { access = "read", path = "./out" }
+]
+```
+
+### Configuration Options
+
+#### Directory Structure
+
+- `src`: Source directory for Solidity contracts (foundry.toml:2)
+- `out`: Output directory for compiled artifacts (foundry.toml:3)
+- `libs`: Dependencies directory (foundry.toml:4)
+
+#### File System Permissions
+
+Grants scripts read access to specific directories (foundry.toml:7-9):
+
+- `./broadcast`: Deployment transaction records
+- `./out`: Compiled contract artifacts
+
+These permissions allow the interaction scripts to read deployment data and find recently deployed contracts.
+
+### Common Customizations
+
+Add these options to `foundry.toml` as needed:
+
+<CodeGroup>
+```toml Optimizer Settings
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+optimizer = true
+optimizer_runs = 200
+
+fs_permissions = [
+    { access = "read", path = "./broadcast" },
+    { access = "read", path = "./out" }
+]
+```
+
+```toml Gas Reports
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+gas_reports = ["MemberVote"]
+
+fs_permissions = [
+    { access = "read", path = "./broadcast" },
+    { access = "read", path = "./out" }
+]
+```
+
+```toml EVM Version
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+evm_version = "paris"
+
+fs_permissions = [
+    { access = "read", path = "./broadcast" },
+    { access = "read", path = "./out" }
+]
+```
+</CodeGroup>
+
+See the [Foundry configuration reference](https://book.getfoundry.sh/reference/config/) for all available options.
+
+## Network Configuration
+
+The `HelperConfig.s.sol` script manages network-specific deployment parameters.
+
+### Entry Fee Configuration
+
+Modify the entry fee for different networks:
+
+```solidity script/HelperConfig.s.sol
+function getSepoliaConfig() public pure returns (NetworkConfig memory) {
+    NetworkConfig memory sepoliaConfig = NetworkConfig({entryFee: 0.01 ether});
+    return sepoliaConfig;
+}
+
+function getOrCreateAnvilConfig() public pure returns (NetworkConfig memory) {
+    NetworkConfig memory anvilConfig = NetworkConfig({entryFee: 0.01 ether});
+    return anvilConfig;
+}
+```
+
+### Changing the Entry Fee
+
+To set a different entry fee:
+
+<Steps>
+  <Step title="Edit HelperConfig.s.sol">
+    Open `script/HelperConfig.s.sol` and modify the entry fee value:
+    
+    ```solidity
+    function getSepoliaConfig() public pure returns (NetworkConfig memory) {
+        NetworkConfig memory sepoliaConfig = NetworkConfig({entryFee: 0.05 ether}); // Changed from 0.01
+        return sepoliaConfig;
+    }
+    ```
+  </Step>
+
+  <Step title="Rebuild contracts">
+    Recompile to ensure changes are included:
+    ```bash
+    forge build
+    ```
+  </Step>
+
+  <Step title="Deploy with new configuration">
+    Deploy the contract with the updated entry fee:
+    ```bash
+    make deploy ARGS="--network sepolia"
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+  Changing the entry fee in HelperConfig only affects new deployments. Existing deployed contracts will continue using their original entry fee (set as immutable in MemberVote.sol:27).
+</Warning>
+
+### Adding New Networks
+
+Add support for additional networks like Mainnet or Polygon:
+
+```solidity script/HelperConfig.s.sol
+constructor() {
+    if (block.chainid == 11155111) {
+        activeNetworkConfig = getSepoliaConfig();
+    } else if (block.chainid == 1) {
+        activeNetworkConfig = getMainnetConfig();
+    } else if (block.chainid == 137) {
+        activeNetworkConfig = getPolygonConfig();
+    } else {
+        activeNetworkConfig = getOrCreateAnvilConfig();
+    }
+}
+
+function getMainnetConfig() public pure returns (NetworkConfig memory) {
+    NetworkConfig memory mainnetConfig = NetworkConfig({entryFee: 0.001 ether});
+    return mainnetConfig;
+}
+
+function getPolygonConfig() public pure returns (NetworkConfig memory) {
+    NetworkConfig memory polygonConfig = NetworkConfig({entryFee: 1 ether}); // 1 MATIC
+    return polygonConfig;
+}
+```
+
+Common chain IDs:
+- Ethereum Mainnet: `1`
+- Sepolia: `11155111`
+- Polygon: `137`
+- Arbitrum: `42161`
+- Optimism: `10`
+
+## Makefile Configuration
+
+The Makefile provides convenient commands for deployment and interactions.
+
+### Network Arguments
+
+The Makefile (Makefile:30-34) configures network-specific arguments:
+
+```makefile Makefile
+NETWORK_ARGS := --rpc-url http://localhost:8545 --private-key $(DEFAULT_ANVIL_KEY) --broadcast
+
+ifeq ($(findstring --network sepolia,$(ARGS)),--network sepolia)
+	NETWORK_ARGS := --rpc-url $(SEPOLIA_RPC_URL) --private-key $(PRIVATE_KEY) --broadcast --verify --etherscan-api-key $(ETHERSCAN_API_KEY) -vvvv
+endif
+```
+
+### Default Anvil Key
+
+The Makefile uses a default Anvil private key for local development (Makefile:5):
+
+```makefile
+DEFAULT_ANVIL_KEY := ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+```
+
+<Warning>
+  This is the first default Anvil account. Never use this key on public networks!
+</Warning>
+
+### Customizing Makefile Commands
+
+Add new deployment targets or modify existing ones:
+
+<CodeGroup>
+```makefile Add Mainnet Support
+# Network Configuration
+NETWORK_ARGS := --rpc-url http://localhost:8545 --private-key $(DEFAULT_ANVIL_KEY) --broadcast
+
+ifeq ($(findstring --network sepolia,$(ARGS)),--network sepolia)
+	NETWORK_ARGS := --rpc-url $(SEPOLIA_RPC_URL) --private-key $(PRIVATE_KEY) --broadcast --verify --etherscan-api-key $(ETHERSCAN_API_KEY) -vvvv
+endif
+
+ifeq ($(findstring --network mainnet,$(ARGS)),--network mainnet)
+	NETWORK_ARGS := --rpc-url $(MAINNET_RPC_URL) --private-key $(PRIVATE_KEY) --broadcast --verify --etherscan-api-key $(ETHERSCAN_API_KEY) -vvvv
+endif
+```
+
+```makefile Add Coverage Command
+coverage:
+	@forge coverage --report lcov
+	@genhtml lcov.info --branch-coverage --output-dir coverage
+```
+
+```makefile Add Snapshot Command
+snapshot:
+	@forge snapshot
+```
+</CodeGroup>
+
+### Available Make Commands
+
+Current Makefile commands (Makefile:13-48):
+
+| Command | Description |
+|---------|-------------|
+| `make install` | Install Foundry dependencies |
+| `make build` | Compile contracts |
+| `make test` | Run test suite |
+| `make format` | Format Solidity files |
+| `make anvil` | Start local Anvil node |
+| `make deploy` | Deploy MemberVote contract |
+| `make start-vote` | Start voting round |
+| `make reset-vote` | Reset votes |
+| `make vote` | Cast a vote |
+
+## Environment Variables
+
+Create a `.env` file for network-specific settings:
+
+```bash .env
+# Sepolia Configuration
+SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/YOUR_API_KEY
+PRIVATE_KEY=your_private_key_without_0x
+ETHERSCAN_API_KEY=your_etherscan_api_key
+
+# Voting Configuration
+VOTE_OPTION=0  # 0 for Option A, 1 for Option B
+```
+
+### Required Variables for Sepolia
+
+- `SEPOLIA_RPC_URL`: Alchemy or Infura RPC endpoint
+- `PRIVATE_KEY`: Your wallet's private key (without 0x prefix)
+- `ETHERSCAN_API_KEY`: For contract verification
+
+### Optional Variables
+
+- `VOTE_OPTION`: Default vote option (0 or 1). Defaults to 0 if not set (Interactions.s.sol:40)
+
+<Warning>
+  Never commit `.env` files to version control. Add `.env` to your `.gitignore` file.
+</Warning>
+
+## Anvil Configuration
+
+Customize the local Anvil node settings (Makefile:27):
+
+```makefile Makefile
+anvil :; anvil -m 'test test test test test test test test test test test junk' --steps-tracing --block-time 1
+```
+
+### Anvil Options
+
+- `-m`: Mnemonic phrase for deterministic accounts
+- `--steps-tracing`: Enable detailed transaction traces
+- `--block-time`: Block production interval in seconds
+
+### Custom Anvil Configuration
+
+Modify Anvil startup for different scenarios:
+
+<CodeGroup>
+```makefile Faster Blocks
+anvil :; anvil -m 'test test test test test test test test test test test junk' --steps-tracing --block-time 0.5
+```
+
+```makefile Different Base Fee
+anvil :; anvil -m 'test test test test test test test test test test test junk' --steps-tracing --block-time 1 --base-fee 0
+```
+
+```makefile Fork Mainnet
+anvil :; anvil --fork-url $(MAINNET_RPC_URL) --fork-block-number 18000000
+```
+</CodeGroup>
+
+See the [Anvil reference](https://book.getfoundry.sh/reference/anvil/) for all options.
+
+## Contract Configuration
+
+The MemberVote contract has several immutable configuration values set at deployment:
+
+### Entry Fee
+
+Set during deployment and cannot be changed (MemberVote.sol:27):
+
+```solidity src/MemberVote.sol
+uint256 private immutable i_entryFee;
+
+constructor(uint256 entryFee) {
+    i_owner = msg.sender;
+    i_entryFee = entryFee;
+    // ...
+}
+```
+
+To use a different entry fee, deploy a new contract instance.
+
+### Owner Address
+
+Set to `msg.sender` at deployment and cannot be changed (MemberVote.sol:23):
+
+```solidity src/MemberVote.sol
+address private immutable i_owner;
+
+constructor(uint256 entryFee) {
+    i_owner = msg.sender;
+    // ...
+}
+```
+
+<Info>
+  The contract does not include owner transfer functionality. The deployer remains the permanent owner.
+</Info>
+
+### Initial State
+
+The contract starts in the Registering workflow station (MemberVote.sol:36):
+
+```solidity src/MemberVote.sol
+constructor(uint256 entryFee) {
+    i_owner = msg.sender;
+    i_entryFee = entryFee;
+    s_electionId = 1;
+    s_workFlowStation = WorkFlowStation.Registering;
+}
+```
+
+## Deployment Script Configuration
+
+The `DeployMemberVote` script (script/MemberVote.s.sol:8) is minimal and doesn't require configuration:
+
+```solidity script/MemberVote.s.sol
+contract DeployMemberVote is Script {
+    function run() external returns (MemberVote, HelperConfig) {
+        HelperConfig helperConfig = new HelperConfig();
+        (uint256 entryFee) = helperConfig.activeNetworkConfig();
+        vm.startBroadcast();
+        MemberVote memberVote = new MemberVote(entryFee);
+        vm.stopBroadcast();
+        return (memberVote, helperConfig);
+    }
+}
+```
+
+All configuration is handled through HelperConfig, making the deployment script network-agnostic.
+
+## Testing Configuration
+
+Run tests with custom options:
+
+<CodeGroup>
+```bash Verbose Output
+forge test -vvvv
+```
+
+```bash Gas Report
+forge test --gas-report
+```
+
+```bash Coverage
+forge coverage
+```
+
+```bash Specific Test
+forge test --match-test testVote
+```
+</CodeGroup>
+
+## Configuration Best Practices
+
+1. **Never hardcode secrets**: Use environment variables for private keys and API keys
+2. **Use different entry fees per network**: Lower fees for testnets, higher for mainnet
+3. **Enable verification**: Always verify on public networks for transparency
+4. **Version control**: Commit `foundry.toml` and `Makefile`, never commit `.env`
+5. **Document changes**: Comment why you changed default configurations
+
+## Next Steps
+
+- [Deployment](/guides/deployment) - Deploy with your custom configuration
+- [Managing Elections](/guides/managing-elections) - Control voting rounds
+- [Casting Votes](/guides/casting-votes) - Participate in elections

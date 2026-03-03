@@ -1,0 +1,178 @@
+---
+title: Voting Mechanics
+description: How members cast votes, entry fees, and double-voting prevention
+---
+
+The voting system allows members to cast votes for one of two options while paying an entry fee. The contract enforces strict rules to ensure fair and valid voting.
+
+## The vote() Function
+
+Members cast their votes using the `vote()` function with a single parameter:
+
+```solidity
+function vote(uint256 option) public payable {
+    address voter = msg.sender;
+    if (msg.value < i_entryFee) {
+        revert MemberVote__InvalidEntryFee();
+    }
+    if (s_workFlowStation != WorkFlowStation.Voting) {
+        revert MemberVote__WrongWorkflowStation();
+    }
+
+    if (s_addressToVoted[voter] == s_electionId) {
+        revert MemberVote__AlreadyVoted();
+    }
+
+    if (option != 0 && option != 1) {
+        revert MemberVote__InvalidOption();
+    }
+    s_addressToVoted[voter] = s_electionId;
+    voters.push(voter);
+
+    if (option == 0) {
+        optionAVotes += 1;
+    }
+
+    if (option == 1) {
+        optionBVotes += 1;
+    }
+}
+```
+
+## Option Selection
+
+The contract supports two voting options identified by numeric values:
+
+- **Option A**: Pass `0` as the parameter
+- **Option B**: Pass `1` as the parameter
+
+<CodeGroup>
+```solidity Vote for Option A
+memberVote.vote{value: entryFee}(0);
+```
+
+```solidity Vote for Option B
+memberVote.vote{value: entryFee}(1);
+```
+</CodeGroup>
+
+<Warning>
+Any value other than `0` or `1` will cause the transaction to revert with `MemberVote__InvalidOption`.
+</Warning>
+
+## Entry Fee Requirement
+
+Each vote requires payment of an entry fee set at contract deployment:
+
+```solidity
+constructor(uint256 entryFee) {
+    i_owner = msg.sender;
+    i_entryFee = entryFee;
+    s_electionId = 1;
+    s_workFlowStation = WorkFlowStation.Registering;
+}
+```
+
+The entry fee is stored as an immutable variable (`i_entryFee`), meaning it cannot be changed after deployment.
+
+<Note>
+You must send at least the entry fee amount when calling `vote()`. Sending less will revert with `MemberVote__InvalidEntryFee`.
+</Note>
+
+### Entry Fee Validation
+
+The contract checks that the sent value meets the minimum requirement:
+
+```solidity
+if (msg.value < i_entryFee) {
+    revert MemberVote__InvalidEntryFee();
+}
+```
+
+You can send more than the entry fee, but you cannot send less.
+
+## Double-Voting Prevention
+
+The contract implements a robust mechanism to prevent voters from casting multiple votes in the same election.
+
+### How It Works
+
+The contract uses a mapping that tracks which election each address voted in:
+
+```solidity
+mapping(address => uint256) private s_addressToVoted;
+```
+
+When you vote, the contract:
+1. Checks if you've already voted in the current election
+2. Records your address with the current election ID
+3. Prevents you from voting again
+
+### The Check
+
+Before accepting a vote, the contract verifies you haven't voted yet:
+
+```solidity
+if (s_addressToVoted[voter] == s_electionId) {
+    revert MemberVote__AlreadyVoted();
+}
+```
+
+<Warning>
+Attempting to vote twice in the same election will revert with `MemberVote__AlreadyVoted`.
+</Warning>
+
+### Recording the Vote
+
+After validation, your vote is recorded:
+
+```solidity
+s_addressToVoted[voter] = s_electionId;
+voters.push(voter);
+```
+
+This marks your address as having voted in the current election and adds you to the voters list.
+
+## Error Conditions
+
+The `vote()` function can revert with several errors:
+
+<AccordionGroup>
+<Accordion title="MemberVote__InvalidEntryFee" icon="dollar-sign">
+Triggered when `msg.value < i_entryFee`. You must send at least the required entry fee to cast your vote.
+</Accordion>
+
+<Accordion title="MemberVote__WrongWorkflowStation" icon="traffic-light">
+Triggered when the contract is not in the `Voting` state. Votes can only be cast during the active voting phase.
+</Accordion>
+
+<Accordion title="MemberVote__AlreadyVoted" icon="ban">
+Triggered when your address has already voted in the current election. Each address can only vote once per election cycle.
+</Accordion>
+
+<Accordion title="MemberVote__InvalidOption" icon="exclamation-triangle">
+Triggered when the option parameter is neither `0` nor `1`. Only these two values are valid voting options.
+</Accordion>
+</AccordionGroup>
+
+## Vote Counting
+
+After all validations pass, the contract increments the vote count for your selected option:
+
+```solidity
+if (option == 0) {
+    optionAVotes += 1;
+}
+
+if (option == 1) {
+    optionBVotes += 1;
+}
+```
+
+You can query the current vote counts using:
+- `getOptionAVotes()` - Returns the number of votes for Option A
+- `getOptionBVotes()` - Returns the number of votes for Option B
+
+<Note>
+The voter's address is added to the `voters` array at src/MemberVote.sol:93, allowing anyone to retrieve the complete list of participants using `getVoters()`.
+</Note>

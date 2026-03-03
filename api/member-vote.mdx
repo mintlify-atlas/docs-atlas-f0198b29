@@ -1,0 +1,321 @@
+---
+title: 'MemberVote Contract'
+description: 'Complete API reference for the MemberVote smart contract'
+---
+
+## Overview
+
+The MemberVote contract manages a binary voting system where members can vote for one of two options (Option A or Option B). The contract implements a workflow-based voting process with entry fees and owner-controlled election phases.
+
+**Author**: Pragyat Nikunj
+
+**License**: MIT
+
+**Solidity Version**: ^0.8.18
+
+## WorkFlowStation Enum
+
+The contract uses a workflow station enum to manage the voting lifecycle:
+
+```solidity
+enum WorkFlowStation {
+    Registering,  // Initial phase, waiting to start voting
+    Voting,       // Active voting phase
+    Resetting     // Post-voting phase, preparing for next election
+}
+```
+
+## Constructor
+
+### constructor
+
+```solidity
+constructor(uint256 entryFee)
+```
+
+Initializes the MemberVote contract with a specified entry fee.
+
+<ParamField path="entryFee" type="uint256" required>
+  The minimum amount in wei required to cast a vote
+</ParamField>
+
+**Behavior**:
+- Sets the deployer as the contract owner
+- Initializes the election ID to 1
+- Sets the workflow station to `Registering`
+- Stores the entry fee as an immutable value
+
+**Example**:
+```solidity
+// Deploy with 0.01 ETH entry fee
+MemberVote voting = new MemberVote(0.01 ether);
+```
+
+## State-Changing Functions
+
+### startVote
+
+```solidity
+function startVote() public onlyOwner
+```
+
+Starts a new voting session by transitioning to the Voting workflow station.
+
+**Access Control**: Owner only
+
+**Behavior**:
+- Changes workflow station to `Voting`
+- Resets Option A votes to 0
+- Resets Option B votes to 0
+- Clears the voters array
+
+**Reverts**:
+- `MemberVote__NotOwner`: If called by non-owner
+
+**Example**:
+```solidity
+voting.startVote();
+```
+
+---
+
+### resetVotes
+
+```solidity
+function resetVotes() public onlyOwner
+```
+
+Resets the voting process and increments the election ID.
+
+**Access Control**: Owner only
+
+**Requirements**:
+- Current workflow station must be `Voting`
+
+**Behavior**:
+- Changes workflow station to `Resetting`
+- Increments the election ID by 1
+
+**Reverts**:
+- `MemberVote__NotOwner`: If called by non-owner
+- `MemberVote__WrongWorkflowStation`: If not currently in `Voting` state
+
+**Example**:
+```solidity
+voting.resetVotes();
+```
+
+---
+
+### vote
+
+```solidity
+function vote(uint256 option) public payable
+```
+
+Allows a voter to cast their vote for a specific option.
+
+<ParamField path="option" type="uint256" required>
+  The option to vote for: `0` for Option A, `1` for Option B
+</ParamField>
+
+**Requirements**:
+- `msg.value` must be greater than or equal to the entry fee
+- Current workflow station must be `Voting`
+- Caller must not have already voted in this election
+- Option must be either 0 or 1
+
+**Behavior**:
+- Records the voter's address mapped to the current election ID
+- Adds voter to the voters array
+- Increments the vote count for the selected option
+- Accepts payment (entry fee)
+
+**Reverts**:
+- `MemberVote__InvalidEntryFee`: If sent value is less than required entry fee
+- `MemberVote__WrongWorkflowStation`: If not currently in `Voting` state
+- `MemberVote__AlreadyVoted`: If caller has already voted in this election
+- `MemberVote__InvalidOption`: If option is not 0 or 1
+
+**Example**:
+```solidity
+// Vote for Option A with 0.01 ETH
+voting.vote{value: 0.01 ether}(0);
+
+// Vote for Option B with 0.01 ETH
+voting.vote{value: 0.01 ether}(1);
+```
+
+---
+
+### withdraw
+
+```solidity
+function withdraw() public onlyOwner
+```
+
+Withdraws all collected entry fees to the owner's address.
+
+**Access Control**: Owner only
+
+**Behavior**:
+- Transfers the entire contract balance to the owner
+- Uses low-level call for the transfer
+
+**Reverts**:
+- `MemberVote__NotOwner`: If called by non-owner
+- `MemberVote__WithdrawFailed`: If the transfer fails
+
+**Example**:
+```solidity
+voting.withdraw();
+```
+
+## View Functions
+
+### getOptionAVotes
+
+```solidity
+function getOptionAVotes() public view returns (uint256)
+```
+
+Returns the current vote count for Option A.
+
+<ResponseField name="optionAVotes" type="uint256">
+  The total number of votes cast for Option A in the current election
+</ResponseField>
+
+**Example**:
+```solidity
+uint256 votesA = voting.getOptionAVotes();
+```
+
+---
+
+### getOptionBVotes
+
+```solidity
+function getOptionBVotes() public view returns (uint256)
+```
+
+Returns the current vote count for Option B.
+
+<ResponseField name="optionBVotes" type="uint256">
+  The total number of votes cast for Option B in the current election
+</ResponseField>
+
+**Example**:
+```solidity
+uint256 votesB = voting.getOptionBVotes();
+```
+
+---
+
+### getElectionId
+
+```solidity
+function getElectionId() public view returns (uint256)
+```
+
+Returns the current election ID.
+
+<ResponseField name="electionId" type="uint256">
+  The sequential identifier for the current election (starts at 1)
+</ResponseField>
+
+**Example**:
+```solidity
+uint256 currentElection = voting.getElectionId();
+```
+
+---
+
+### getOwner
+
+```solidity
+function getOwner() public view returns (address)
+```
+
+Returns the address of the contract owner.
+
+<ResponseField name="owner" type="address">
+  The immutable owner address (set during contract deployment)
+</ResponseField>
+
+**Example**:
+```solidity
+address owner = voting.getOwner();
+```
+
+---
+
+### getWorkflowStation
+
+```solidity
+function getWorkflowStation() public view returns (WorkFlowStation)
+```
+
+Returns the current workflow station of the voting process.
+
+<ResponseField name="workflowStation" type="WorkFlowStation">
+  The current phase: `Registering` (0), `Voting` (1), or `Resetting` (2)
+</ResponseField>
+
+**Example**:
+```solidity
+WorkFlowStation current = voting.getWorkflowStation();
+if (current == WorkFlowStation.Voting) {
+    // Voting is active
+}
+```
+
+---
+
+### getVoters
+
+```solidity
+function getVoters() public view returns (address[] memory)
+```
+
+Returns an array of all addresses that have voted in the current election.
+
+<ResponseField name="voters" type="address[]">
+  Array of voter addresses in the order they voted
+</ResponseField>
+
+**Example**:
+```solidity
+address[] memory allVoters = voting.getVoters();
+uint256 totalVoters = allVoters.length;
+```
+
+---
+
+### addressVoted
+
+```solidity
+function addressVoted(address voter) public view returns (uint256)
+```
+
+Checks which election a specific address voted in.
+
+<ParamField path="voter" type="address" required>
+  The address to check voting status for
+</ParamField>
+
+<ResponseField name="electionId" type="uint256">
+  The election ID in which the address voted (0 if never voted)
+</ResponseField>
+
+**Usage**: Compare the returned value with the current election ID to determine if the address has voted in the current election.
+
+**Example**:
+```solidity
+address voterAddress = 0x1234...;
+uint256 votedInElection = voting.addressVoted(voterAddress);
+uint256 currentElection = voting.getElectionId();
+
+if (votedInElection == currentElection) {
+    // Address has already voted in current election
+}
+```

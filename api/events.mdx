@@ -1,0 +1,194 @@
+---
+title: 'Contract Events'
+description: 'Event emissions in the MemberVote contract'
+---
+
+## Current Status
+
+The MemberVote contract **does not currently emit any events**. While the contract functions properly for voting and fund management, the lack of events means that off-chain applications cannot easily track contract activity through event logs.
+
+## Impact
+
+Without events, the following operations are not easily observable:
+
+- When voting starts (`startVote()` is called)
+- When a vote is cast (which address voted and for which option)
+- When votes are reset (`resetVotes()` is called)
+- When funds are withdrawn (`withdraw()` is called)
+- Changes to the workflow station
+
+To track these activities, applications must:
+- Poll the contract state regularly using view functions
+- Parse transaction data from blocks
+- Maintain off-chain indexing infrastructure
+
+## Recommended Events
+
+To improve observability and enable efficient off-chain tracking, consider adding the following events:
+
+### VotingStarted
+
+```solidity
+event VotingStarted(uint256 indexed electionId, uint256 timestamp);
+```
+
+Emit when `startVote()` is called to signal the beginning of a new voting session.
+
+**Usage**:
+```solidity
+function startVote() public onlyOwner {
+    s_workFlowStation = WorkFlowStation.Voting;
+    optionAVotes = 0;
+    optionBVotes = 0;
+    voters = new address[](0);
+    emit VotingStarted(s_electionId, block.timestamp);
+}
+```
+
+---
+
+### VoteCast
+
+```solidity
+event VoteCast(
+    address indexed voter,
+    uint256 indexed electionId,
+    uint256 option,
+    uint256 amount,
+    uint256 timestamp
+);
+```
+
+Emit when a vote is successfully cast.
+
+**Usage**:
+```solidity
+function vote(uint256 option) public payable {
+    // ... existing validation logic ...
+    
+    if (option == 0) {
+        optionAVotes += 1;
+    }
+    if (option == 1) {
+        optionBVotes += 1;
+    }
+    
+    emit VoteCast(msg.sender, s_electionId, option, msg.value, block.timestamp);
+}
+```
+
+---
+
+### VotingReset
+
+```solidity
+event VotingReset(
+    uint256 indexed previousElectionId,
+    uint256 indexed newElectionId,
+    uint256 optionAVotes,
+    uint256 optionBVotes,
+    uint256 timestamp
+);
+```
+
+Emit when voting is reset to preserve the final vote counts for the concluded election.
+
+**Usage**:
+```solidity
+function resetVotes() public onlyOwner {
+    if (s_workFlowStation != WorkFlowStation.Voting) {
+        revert MemberVote__WrongWorkflowStation();
+    }
+    
+    uint256 previousElectionId = s_electionId;
+    s_workFlowStation = WorkFlowStation.Resetting;
+    s_electionId++;
+    
+    emit VotingReset(
+        previousElectionId,
+        s_electionId,
+        optionAVotes,
+        optionBVotes,
+        block.timestamp
+    );
+}
+```
+
+---
+
+### FundsWithdrawn
+
+```solidity
+event FundsWithdrawn(address indexed owner, uint256 amount, uint256 timestamp);
+```
+
+Emit when the owner withdraws collected entry fees.
+
+**Usage**:
+```solidity
+function withdraw() public onlyOwner {
+    uint256 balance = address(this).balance;
+    (bool success,) = i_owner.call{value: balance}("");
+    if (!success) {
+        revert MemberVote__WithdrawFailed();
+    }
+    emit FundsWithdrawn(i_owner, balance, block.timestamp);
+}
+```
+
+---
+
+### WorkflowStationChanged
+
+```solidity
+event WorkflowStationChanged(
+    WorkFlowStation indexed previousStation,
+    WorkFlowStation indexed newStation,
+    uint256 timestamp
+);
+```
+
+Emit whenever the workflow station changes state.
+
+**Usage**:
+```solidity
+function startVote() public onlyOwner {
+    WorkFlowStation previous = s_workFlowStation;
+    s_workFlowStation = WorkFlowStation.Voting;
+    // ... rest of logic ...
+    emit WorkflowStationChanged(previous, WorkFlowStation.Voting, block.timestamp);
+}
+```
+
+## Benefits of Adding Events
+
+Implementing these events would enable:
+
+1. **Real-time monitoring**: Front-end applications can listen for events and update UI immediately
+2. **Historical analysis**: Query past events to analyze voting patterns and participation
+3. **Transparency**: Anyone can verify voting activity through public event logs
+4. **Integration**: Easier integration with tools like The Graph, Etherscan, and Dune Analytics
+5. **Gas efficiency**: Reading events is free, unlike calling view functions
+
+## Querying Events (Once Implemented)
+
+Once events are added, you can query them using web3 libraries:
+
+```javascript
+// Example using ethers.js
+const filter = voting.filters.VoteCast();
+const events = await voting.queryFilter(filter);
+
+events.forEach(event => {
+    console.log(`Voter: ${event.args.voter}`);
+    console.log(`Option: ${event.args.option}`);
+    console.log(`Amount: ${ethers.utils.formatEther(event.args.amount)} ETH`);
+});
+```
+
+```javascript
+// Listen for new votes in real-time
+voting.on("VoteCast", (voter, electionId, option, amount, timestamp) => {
+    console.log(`New vote from ${voter} for option ${option}`);
+});
+```

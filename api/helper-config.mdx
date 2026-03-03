@@ -1,0 +1,207 @@
+---
+title: 'HelperConfig'
+description: 'API reference for the HelperConfig network configuration contract'
+---
+
+## Overview
+
+The `HelperConfig` contract manages network-specific configuration for MemberVote deployments. It automatically detects the current network and provides the appropriate configuration values.
+
+Location: `script/HelperConfig.s.sol:6`
+
+## NetworkConfig Struct
+
+Defines the configuration parameters for each network.
+
+```solidity
+struct NetworkConfig {
+    uint256 entryFee;
+}
+```
+
+**Fields:**
+- `entryFee` (`uint256`) - The fee required to cast a vote on this network
+
+## State Variables
+
+### activeNetworkConfig
+
+```solidity
+NetworkConfig public activeNetworkConfig;
+```
+
+The currently active network configuration, automatically set based on the chain ID.
+
+## Constructor
+
+Automatically detects the network and sets the active configuration.
+
+```solidity
+constructor() {
+    if (block.chainid == 11155111) {
+        activeNetworkConfig = getSepoliaConfig();
+    } else {
+        activeNetworkConfig = getOrCreateAnvilConfig();
+    }
+}
+```
+
+**Network Detection:**
+- Chain ID `11155111` (Sepolia) → uses Sepolia configuration
+- Any other chain ID → uses Anvil (local) configuration
+
+## Functions
+
+### getSepoliaConfig()
+
+Returns the network configuration for Sepolia testnet.
+
+**Returns:**
+- `NetworkConfig` - Configuration struct with Sepolia-specific values
+
+```solidity
+function getSepoliaConfig() public pure returns (NetworkConfig memory) {
+    NetworkConfig memory sepoliaConfig = NetworkConfig({entryFee: 0.01 ether});
+    return sepoliaConfig;
+}
+```
+
+**Configuration:**
+- Entry Fee: 0.01 ETH
+
+### getOrCreateAnvilConfig()
+
+Returns the network configuration for local Anvil development.
+
+**Returns:**
+- `NetworkConfig` - Configuration struct with Anvil-specific values
+
+```solidity
+function getOrCreateAnvilConfig() public pure returns (NetworkConfig memory) {
+    NetworkConfig memory anvilConfig = NetworkConfig({entryFee: 0.01 ether});
+    return anvilConfig;
+}
+```
+
+**Configuration:**
+- Entry Fee: 0.01 ETH
+
+## Usage Examples
+
+### Accessing Active Configuration
+
+```solidity
+HelperConfig helperConfig = new HelperConfig();
+(uint256 entryFee) = helperConfig.activeNetworkConfig();
+```
+
+### In Deployment Scripts
+
+```solidity
+HelperConfig helperConfig = new HelperConfig();
+(uint256 entryFee) = helperConfig.activeNetworkConfig();
+MemberVote memberVote = new MemberVote(entryFee);
+```
+
+### In Interaction Scripts
+
+```solidity
+HelperConfig helperConfig = new HelperConfig();
+(uint256 entryFee) = helperConfig.activeNetworkConfig();
+MemberVote(contractAddress).vote{value: entryFee}(option);
+```
+
+## Modifying Configuration
+
+To change the entry fee for a network, modify the respective configuration function:
+
+### Change Sepolia Entry Fee
+
+```solidity
+function getSepoliaConfig() public pure returns (NetworkConfig memory) {
+    NetworkConfig memory sepoliaConfig = NetworkConfig({
+        entryFee: 0.05 ether  // Changed from 0.01 ether
+    });
+    return sepoliaConfig;
+}
+```
+
+### Change Anvil Entry Fee
+
+```solidity
+function getOrCreateAnvilConfig() public pure returns (NetworkConfig memory) {
+    NetworkConfig memory anvilConfig = NetworkConfig({
+        entryFee: 0.001 ether  // Changed from 0.01 ether
+    });
+    return anvilConfig;
+}
+```
+
+## Adding New Networks
+
+To add support for additional networks:
+
+1. Create a new configuration function:
+
+```solidity
+function getMainnetConfig() public pure returns (NetworkConfig memory) {
+    NetworkConfig memory mainnetConfig = NetworkConfig({entryFee: 0.1 ether});
+    return mainnetConfig;
+}
+```
+
+2. Update the constructor to detect the new network:
+
+```solidity
+constructor() {
+    if (block.chainid == 11155111) {
+        activeNetworkConfig = getSepoliaConfig();
+    } else if (block.chainid == 1) {
+        activeNetworkConfig = getMainnetConfig();
+    } else {
+        activeNetworkConfig = getOrCreateAnvilConfig();
+    }
+}
+```
+
+## Supported Networks
+
+| Network | Chain ID | Entry Fee |
+|---------|----------|----------|
+| Sepolia | 11155111 | 0.01 ETH |
+| Anvil   | 31337    | 0.01 ETH |
+
+## Full Source Code
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.18;
+
+import {Script} from "forge-std/Script.sol";
+
+contract HelperConfig is Script {
+    struct NetworkConfig {
+        uint256 entryFee;
+    }
+
+    NetworkConfig public activeNetworkConfig;
+
+    constructor() {
+        if (block.chainid == 11155111) {
+            activeNetworkConfig = getSepoliaConfig();
+        } else {
+            activeNetworkConfig = getOrCreateAnvilConfig();
+        }
+    }
+
+    function getSepoliaConfig() public pure returns (NetworkConfig memory) {
+        NetworkConfig memory sepoliaConfig = NetworkConfig({entryFee: 0.01 ether});
+        return sepoliaConfig;
+    }
+
+    function getOrCreateAnvilConfig() public pure returns (NetworkConfig memory) {
+        NetworkConfig memory anvilConfig = NetworkConfig({entryFee: 0.01 ether});
+        return anvilConfig;
+    }
+}
+```

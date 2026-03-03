@@ -1,0 +1,163 @@
+---
+title: Testing Overview
+description: Comprehensive testing strategy for the Smart Voting Contract
+---
+
+The Smart Voting Contract uses a comprehensive testing approach combining unit tests and integration tests to ensure contract reliability and correctness.
+
+## Testing Strategy
+
+The test suite is organized into two main categories:
+
+### Unit Tests
+
+Unit tests focus on testing individual contract functions in isolation. They validate:
+- Individual function behavior
+- Access control mechanisms
+- Error handling and custom errors
+- State transitions
+- Getter functions
+
+Located in `test/unit/`:
+- `MemberVoteTest.t.sol` - Core contract functionality
+- `InteractionsTest.t.sol` - Script interaction testing
+
+### Integration Tests
+
+Integration tests validate end-to-end workflows and multi-step processes. They ensure:
+- Complete voting cycles work correctly
+- State resets properly between elections
+- Users can participate across multiple voting sessions
+
+Located in `test/integration/`:
+- `MemberVoteTest.t.sol` - Full workflow scenarios
+
+## Running Tests
+
+### Run All Tests
+
+```bash
+make test
+```
+
+Or directly with Forge:
+
+```bash
+forge test
+```
+
+### Run with Verbosity
+
+For detailed output including logs and traces:
+
+```bash
+# Verbosity level 2 - show logs
+forge test -vv
+
+# Verbosity level 3 - show stack traces for failures
+forge test -vvv
+
+# Verbosity level 4 - show stack traces for all tests
+forge test -vvvv
+
+# Verbosity level 5 - show execution traces
+forge test -vvvvv
+```
+
+### Run Specific Test Files
+
+```bash
+# Run only unit tests
+forge test --match-path "test/unit/*.sol"
+
+# Run only integration tests
+forge test --match-path "test/integration/*.sol"
+```
+
+### Run Specific Test Functions
+
+```bash
+# Run tests matching a pattern
+forge test --match-test "testIfVoterCanVote"
+
+# Run all tests for voting
+forge test --match-test "Vote"
+```
+
+### Watch Mode
+
+Automatically re-run tests on file changes:
+
+```bash
+forge test --watch
+```
+
+## Test Structure
+
+All test contracts follow Foundry's testing conventions:
+
+### Test File Naming
+
+- Test files end with `.t.sol`
+- Contract names match the file name
+- Test functions start with `test` prefix
+
+### Test Setup
+
+Each test contract includes a `setUp()` function that runs before each test:
+
+```solidity
+function setUp() external {
+    DeployMemberVote deployer = new DeployMemberVote();
+    (memberVote, helperConfig) = deployer.run();
+    vm.deal(USER1, STARTING_PLAYER_BALANCE);
+    vm.deal(USER2, STARTING_PLAYER_BALANCE);
+    vm.deal(USER3, STARTING_PLAYER_BALANCE);
+}
+```
+
+### Test Organization
+
+Tests are organized by functionality with clear section comments:
+
+```solidity
+///////////////////////
+// Start Vote Tests //
+/////////////////////
+
+function testIfOwnerCanStartVoting() public {
+    // Test implementation
+}
+
+function testIfVoterCannotStartVoting() public {
+    // Test implementation
+}
+```
+
+## Foundry Cheatcodes
+
+The test suite extensively uses Foundry's cheatcodes:
+
+- `vm.prank(address)` - Set msg.sender for the next call
+- `vm.startPrank(address)` / `vm.stopPrank()` - Set msg.sender for multiple calls
+- `vm.deal(address, amount)` - Set ETH balance for an address
+- `vm.expectRevert(error)` - Expect the next call to revert with specific error
+- `assertEq(a, b)` - Assert equality with custom error messages
+
+## Test Coverage
+
+The test suite covers:
+
+- Workflow state transitions (Registering → Voting → Finished)
+- Access control (owner-only functions)
+- Vote casting with entry fee validation
+- Duplicate vote prevention
+- Election reset and state cleanup
+- Fund withdrawal mechanics
+- All getter functions
+- Script-based interactions
+
+## Next Steps
+
+- [Unit Tests](/testing/unit-tests) - Learn about individual function testing
+- [Integration Tests](/testing/integration-tests) - Understand end-to-end workflow testing

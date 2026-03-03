@@ -1,0 +1,101 @@
+---
+title: 'Deployment Script'
+description: 'API reference for the DeployMemberVote deployment script'
+---
+
+## Overview
+
+The `DeployMemberVote` script handles the deployment of the MemberVote contract with network-specific configuration. It uses the HelperConfig contract to automatically configure the entry fee based on the target network.
+
+## Contract: DeployMemberVote
+
+Location: `script/MemberVote.s.sol:8`
+
+### run()
+
+Deployment function that creates and initializes the MemberVote contract.
+
+**Returns:**
+- `MemberVote` - The deployed MemberVote contract instance
+- `HelperConfig` - The HelperConfig contract instance used for configuration
+
+**Implementation:**
+
+```solidity
+function run() external returns (MemberVote, HelperConfig) {
+    HelperConfig helperConfig = new HelperConfig();
+    (uint256 entryFee) = helperConfig.activeNetworkConfig();
+    vm.startBroadcast();
+    MemberVote memberVote = new MemberVote(entryFee);
+    vm.stopBroadcast();
+    return (memberVote, helperConfig);
+}
+```
+
+**Process:**
+
+1. Creates a new HelperConfig instance
+2. Retrieves the entry fee from the active network configuration
+3. Broadcasts the transaction
+4. Deploys MemberVote with the configured entry fee
+5. Returns both contract instances
+
+## Constructor Parameters
+
+The MemberVote contract is deployed with the following parameter:
+
+- **entryFee** (`uint256`) - The fee required to cast a vote, determined by HelperConfig based on the network
+
+## Usage
+
+### Deploy to Local Anvil
+
+```bash
+make deploy
+```
+
+### Deploy to Sepolia Testnet
+
+```bash
+make deploy ARGS="--network sepolia"
+```
+
+### Direct Forge Command
+
+```bash
+forge script script/MemberVote.s.sol:DeployMemberVote \
+  --rpc-url <RPC_URL> \
+  --private-key <PRIVATE_KEY> \
+  --broadcast
+```
+
+## Network Configuration
+
+The deployment automatically detects the network and applies the appropriate configuration:
+
+- **Sepolia (chainid: 11155111)**: 0.01 ETH entry fee
+- **Anvil (local)**: 0.01 ETH entry fee
+
+See [HelperConfig](/api/helper-config) for details on modifying network configurations.
+
+## Full Source Code
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.18;
+
+import {Script} from "forge-std/Script.sol";
+import {MemberVote} from "../src/MemberVote.sol";
+import {HelperConfig} from "./HelperConfig.s.sol";
+
+contract DeployMemberVote is Script {
+    function run() external returns (MemberVote, HelperConfig) {
+        HelperConfig helperConfig = new HelperConfig();
+        (uint256 entryFee) = helperConfig.activeNetworkConfig();
+        vm.startBroadcast();
+        MemberVote memberVote = new MemberVote(entryFee);
+        vm.stopBroadcast();
+        return (memberVote, helperConfig);
+    }
+}
+```

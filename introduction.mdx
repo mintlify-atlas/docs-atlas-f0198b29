@@ -1,0 +1,135 @@
+---
+title: Introduction
+description: A reusable on-chain voting system with pay-to-vote mechanics and owner-controlled workflow management
+---
+
+# Welcome to Smart Voting Contract
+
+Smart Voting Contract is a production-ready Solidity smart contract that enables secure, transparent voting with built-in economic incentives. Built with Foundry and optimized for gas efficiency, it provides a complete voting infrastructure for your decentralized applications.
+
+<CardGroup cols={2}>
+  <Card
+    title="Quickstart"
+    icon="rocket"
+    href="/quickstart"
+  >
+    Get up and running with Smart Voting Contract in minutes
+  </Card>
+  <Card
+    title="Core concepts"
+    icon="book"
+    href="/concepts/workflow"
+  >
+    Learn about workflow stations, voting mechanics, and election cycles
+  </Card>
+  <Card
+    title="API reference"
+    icon="code"
+    href="/api/member-vote"
+  >
+    Explore all contract functions and events
+  </Card>
+  <Card
+    title="Deployment guide"
+    icon="cloud"
+    href="/guides/deployment"
+  >
+    Deploy to local, testnet, or mainnet networks
+  </Card>
+</CardGroup>
+
+## What is Smart Voting Contract?
+
+Smart Voting Contract is a Solidity-based voting system designed for on-chain governance, polls, and decision-making. It implements a binary choice voting mechanism (Option A vs Option B) with configurable entry fees and owner-controlled election cycles.
+
+The contract is built by [Pragyat Nikunj](https://github.com/pragyat) and leverages Foundry's development toolkit for testing, deployment, and interaction scripts.
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Pay-to-vote entry fee" icon="dollar-sign">
+    Prevent spam and incentivize serious participation with configurable entry fees. The contract owner can withdraw collected fees after voting concludes.
+  </Card>
+  <Card title="Owner-controlled workflow" icon="user-shield">
+    The contract owner manages election phases through three workflow stations: Registering, Voting, and Resetting. Only the owner can start and reset votes.
+  </Card>
+  <Card title="Double-voting prevention" icon="shield-check">
+    Each address can vote only once per election cycle. The contract tracks voters by election ID to prevent duplicate votes.
+  </Card>
+  <Card title="Election cycle reset" icon="rotate">
+    Start fresh elections with automatic vote count reset and new election IDs. Previous election data is preserved through the election ID system.
+  </Card>
+  <Card title="Gas-optimized" icon="gauge-high">
+    Built with gas efficiency in mind using immutable variables, proper data structures, and optimized storage patterns.
+  </Card>
+  <Card title="Comprehensive testing" icon="flask">
+    Includes unit and integration tests built with Foundry, ensuring contract reliability and security.
+  </Card>
+</CardGroup>
+
+## Who should use this?
+
+Smart Voting Contract is ideal for:
+
+- **DAO builders** who need a simple, secure voting mechanism for governance proposals
+- **DApp developers** building applications that require community polling or decision-making
+- **Smart contract learners** studying real-world Solidity patterns and Foundry workflows
+- **Event organizers** running on-chain voting for competitions or awards
+
+<Note>
+  The contract implements a binary voting system (Option A vs Option B). For multi-option voting or more complex governance mechanisms, you'll need to extend the base contract.
+</Note>
+
+## How it works
+
+The voting process follows a simple three-stage workflow:
+
+1. **Registering**: Initial state where the contract owner prepares for the next election
+2. **Voting**: Active voting period where members can cast their votes by paying the entry fee
+3. **Resetting**: Post-voting state where the owner resets the contract for the next election cycle
+
+Each voter must pay a minimum entry fee (default: 0.01 ETH) to cast their vote. The contract prevents double voting by tracking each address against the current election ID.
+
+```solidity
+// Example: Voting for Option A
+function vote(uint256 option) public payable {
+    // Checks entry fee
+    if (msg.value < i_entryFee) {
+        revert MemberVote__InvalidEntryFee();
+    }
+    // Validates workflow station is Voting
+    if (s_workFlowStation != WorkFlowStation.Voting) {
+        revert MemberVote__WrongWorkflowStation();
+    }
+    // Prevents double voting
+    if (s_addressToVoted[voter] == s_electionId) {
+        revert MemberVote__AlreadyVoted();
+    }
+    // Records vote
+    s_addressToVoted[voter] = s_electionId;
+    voters.push(voter);
+}
+```
+
+<Warning>
+  Always ensure the contract is in the correct workflow station before attempting to vote. Calls made during the wrong phase will revert.
+</Warning>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Follow the quickstart"
+    icon="play"
+    href="/quickstart"
+  >
+    Install dependencies, deploy locally, and cast your first vote
+  </Card>
+  <Card
+    title="Explore core concepts"
+    icon="graduation-cap"
+    href="/concepts/workflow"
+  >
+    Deep dive into workflow stations, election cycles, and contract architecture
+  </Card>
+</CardGroup>

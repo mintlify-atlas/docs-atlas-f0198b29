@@ -1,0 +1,327 @@
+---
+title: Casting Votes
+description: Learn how voters can participate in elections and cast their votes
+---
+
+## Overview
+
+The Smart Voting Contract allows members to vote for one of two options (Option A or Option B) by paying a small entry fee. Each address can vote once per election.
+
+## Prerequisites
+
+Before voting:
+
+1. The contract must be in the **Voting** state (owner must call `startVote()`)
+2. Your wallet must have enough ETH to cover:
+   - Entry fee: `0.01 ether`
+   - Gas fees for the transaction
+3. You haven't already voted in the current election
+
+## Casting a Vote
+
+Vote for your preferred option using the Foundry interaction script.
+
+<Steps>
+  <Step title="Set your vote option">
+    Configure which option to vote for using the `VOTE_OPTION` environment variable:
+    
+    <CodeGroup>
+    ```bash Vote for Option A (0)
+    export VOTE_OPTION=0
+    ```
+    
+    ```bash Vote for Option B (1)
+    export VOTE_OPTION=1
+    ```
+    </CodeGroup>
+    
+    <Note>
+      If `VOTE_OPTION` is not set, it defaults to 0 (Option A) as defined in Interactions.s.sol:40.
+    </Note>
+  </Step>
+
+  <Step title="Execute the vote">
+    Submit your vote to the contract:
+    
+    <CodeGroup>
+    ```bash Local (Anvil)
+    make vote
+    ```
+    
+    ```bash Sepolia Testnet
+    make vote ARGS="--network sepolia"
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Verify your vote">
+    Confirm your vote was recorded:
+    ```bash
+    cast call YOUR_CONTRACT_ADDRESS "addressVoted(YOUR_ADDRESS)" --rpc-url http://localhost:8545
+    ```
+    
+    This returns the election ID you voted in. If it matches the current election ID, your vote was successful.
+  </Step>
+</Steps>
+
+## Vote Script Implementation
+
+The `Vote` contract (script/Interactions.s.sol:35) handles vote submission:
+
+```solidity script/Interactions.s.sol
+contract Vote is Script {
+    function run() external {
+        address mostRecentDeployed = DevOpsTools.get_most_recent_deployment("MemberVote", block.chainid);
+        HelperConfig helperConfig = new HelperConfig();
+        (uint256 entryFee) = helperConfig.activeNetworkConfig();
+        uint256 option = vm.envOr("VOTE_OPTION", uint256(0));
+        vote(mostRecentDeployed, option, entryFee);
+    }
+
+    function vote(address _contractAddress, uint256 _option, uint256 _value) public payable {
+        vm.startBroadcast();
+        MemberVote(_contractAddress).vote{value: _value}(_option);
+        vm.stopBroadcast();
+    }
+}
+```
+
+### How It Works
+
+1. **Contract Discovery**: Uses `DevOpsTools` to find the most recently deployed MemberVote contract
+2. **Entry Fee Retrieval**: Gets the network-specific entry fee from HelperConfig
+3. **Option Selection**: Reads `VOTE_OPTION` from environment (defaults to 0)
+4. **Vote Submission**: Sends the vote with the entry fee as msg.value
+
+## Entry Fee Payment
+
+Every vote requires payment of the entry fee configured at deployment.
+
+### Entry Fee Configuration
+
+The entry fee is set in `script/HelperConfig.s.sol`:
+
+- **Sepolia**: `0.01 ether` (HelperConfig.s.sol:22)
+- **Anvil/Local**: `0.01 ether` (HelperConfig.s.sol:27)
+
+### How Payment Works
+
+The vote function (MemberVote.sol:76) validates the payment:
+
+```solidity src/MemberVote.sol
+function vote(uint256 option) public payable {
+    address voter = msg.sender;
+    if (msg.value < i_entryFee) {
+        revert MemberVote__InvalidEntryFee();
+    }
+    // ... rest of voting logic
+}
+```
+
+The entry fee is sent with the transaction using `{value: _value}` (Interactions.s.sol:46).
+
+<Info>
+  You can send more than the minimum entry fee. The contract accepts any value >= the entry fee.
+</Info>
+
+## Voting Options
+
+The contract supports two options:
+
+- **Option A**: Pass `0` as the vote option (MemberVote.sol:95)
+- **Option B**: Pass `1` as the vote option (MemberVote.sol:99)
+
+Any other value will revert with `MemberVote__InvalidOption` (MemberVote.sol:89).
+
+## Vote Validation
+
+The vote function performs several checks before accepting a vote:
+
+### 1. Entry Fee Check
+
+```solidity src/MemberVote.sol
+if (msg.value < i_entryFee) {
+    revert MemberVote__InvalidEntryFee();
+}
+```
+
+Ensures the voter paid at least the minimum entry fee.
+
+### 2. Workflow State Check
+
+```solidity src/MemberVote.sol
+if (s_workFlowStation != WorkFlowStation.Voting) {
+    revert MemberVote__WrongWorkflowStation();
+}
+```
+
+Verifies voting is currently active. The owner must have called `startVote()`.
+
+### 3. Double Voting Prevention
+
+```solidity src/MemberVote.sol
+if (s_addressToVoted[voter] == s_electionId) {
+    revert MemberVote__AlreadyVoted();
+}
+```
+
+Prevents the same address from voting twice in one election. The mapping tracks which election ID each address voted in (MemberVote.sol:85).
+
+### 4. Valid Option Check
+
+```solidity src/MemberVote.sol
+if (option != 0 && option != 1) {
+    revert MemberVote__InvalidOption();
+}
+```
+
+Only accepts 0 (Option A) or 1 (Option B).
+
+## Vote Recording
+
+When a valid vote is cast (MemberVote.sol:92):
+
+1. The voter's address is mapped to the current election ID
+2. The voter is added to the voters array
+3. The appropriate option counter is incremented
+
+```solidity src/MemberVote.sol
+s_addressToVoted[voter] = s_electionId;
+voters.push(voter);
+
+if (option == 0) {
+    optionAVotes += 1;
+}
+
+if (option == 1) {
+    optionBVotes += 1;
+}
+```
+
+## Checking Vote Results
+
+View the current vote tallies:
+
+<CodeGroup>
+```bash Option A Votes
+cast call YOUR_CONTRACT_ADDRESS "getOptionAVotes()" --rpc-url http://localhost:8545
+```
+
+```bash Option B Votes
+cast call YOUR_CONTRACT_ADDRESS "getOptionBVotes()" --rpc-url http://localhost:8545
+```
+
+```bash All Voters
+cast call YOUR_CONTRACT_ADDRESS "getVoters()" --rpc-url http://localhost:8545
+```
+
+```bash Check if Address Voted
+cast call YOUR_CONTRACT_ADDRESS "addressVoted(0xYOUR_ADDRESS)" --rpc-url http://localhost:8545
+```
+</CodeGroup>
+
+## Error Handling
+
+Common errors when voting and how to resolve them:
+
+### MemberVote__InvalidEntryFee
+
+**Problem**: Transaction didn't include enough ETH for the entry fee.
+
+**Solution**: The vote script automatically includes the correct entry fee. If you're calling the contract directly, ensure you send at least `0.01 ether`:
+```bash
+cast send YOUR_CONTRACT_ADDRESS "vote(uint256)" 0 --value 0.01ether --private-key YOUR_KEY --rpc-url http://localhost:8545
+```
+
+### MemberVote__WrongWorkflowStation
+
+**Problem**: Voting hasn't started yet or has been reset.
+
+**Solution**: Check the workflow state:
+```bash
+cast call YOUR_CONTRACT_ADDRESS "getWorkflowStation()" --rpc-url http://localhost:8545
+```
+
+If it returns 0 (Registering) or 2 (Resetting), ask the contract owner to start voting with `make start-vote`.
+
+### MemberVote__AlreadyVoted
+
+**Problem**: Your address has already voted in this election.
+
+**Solution**: Each address can only vote once per election. Wait for the owner to reset votes and start a new election. You can verify by checking:
+```bash
+cast call YOUR_CONTRACT_ADDRESS "addressVoted(YOUR_ADDRESS)" --rpc-url http://localhost:8545
+cast call YOUR_CONTRACT_ADDRESS "getElectionId()" --rpc-url http://localhost:8545
+```
+
+If both return the same number, you've already voted in the current election.
+
+### MemberVote__InvalidOption
+
+**Problem**: Vote option was not 0 or 1.
+
+**Solution**: Set `VOTE_OPTION` to either 0 or 1:
+```bash
+export VOTE_OPTION=0  # for Option A
+# or
+export VOTE_OPTION=1  # for Option B
+```
+
+## Voting from Different Accounts
+
+To vote from multiple accounts:
+
+<Steps>
+  <Step title="Switch accounts">
+    For Anvil, use different Anvil default accounts. For Sepolia, use different private keys in your `.env` file.
+  </Step>
+
+  <Step title="Set vote option">
+    ```bash
+    export VOTE_OPTION=0  # or 1
+    ```
+  </Step>
+
+  <Step title="Cast vote">
+    ```bash
+    make vote ARGS="--network sepolia"
+    ```
+  </Step>
+</Steps>
+
+## Direct Contract Interaction
+
+You can also vote directly using `cast send` instead of the Makefile:
+
+<CodeGroup>
+```bash Vote for Option A
+cast send YOUR_CONTRACT_ADDRESS "vote(uint256)" 0 \
+  --value 0.01ether \
+  --private-key YOUR_PRIVATE_KEY \
+  --rpc-url http://localhost:8545
+```
+
+```bash Vote for Option B
+cast send YOUR_CONTRACT_ADDRESS "vote(uint256)" 1 \
+  --value 0.01ether \
+  --private-key YOUR_PRIVATE_KEY \
+  --rpc-url http://localhost:8545
+```
+</CodeGroup>
+
+## Multiple Elections
+
+The same address can vote in multiple elections because the contract tracks votes by election ID:
+
+1. Vote in Election 1 (ID: 1)
+2. Owner resets votes → Election ID increments to 2
+3. Owner starts new voting round
+4. You can vote again in Election 2 (ID: 2)
+
+The contract checks if `addressToVoted[voter] == currentElectionId` (MemberVote.sol:85), so previous votes don't prevent participation in new elections.
+
+## Next Steps
+
+- [Managing Elections](/guides/managing-elections) - Learn how owners control voting rounds
+- [Configuration](/guides/configuration) - Customize entry fees and settings
+- [API Reference](/api/member-vote) - View all contract functions
