@@ -319,3 +319,14 @@ if (votedInElection == currentElection) {
     // Address has already voted in current election
 }
 ```
+
+## Important Notes
+
+<Note>
+**No Entry Fee Getter**: The contract does not provide a public getter function for the entry fee (`i_entryFee`). The entry fee is set during deployment and stored as a private immutable variable. To track the entry fee, applications should:
+- Store the deployment parameter off-chain
+- Monitor failed transactions with `MemberVote__InvalidEntryFee` errors to infer the minimum required fee
+- Attempt votes with incrementing amounts until successful (not recommended for production)
+
+Consider adding a `getEntryFee()` public view function if you need to query this value on-chain.
+</Note>
